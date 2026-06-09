@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# Ambiente virtual
+venv/
+.env/
+.venv/
+
+# Ferramentas
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Dados do projeto
+metadados.json
+biblioteca_digital.log
+acervo/
+
+# IDE
+.vscode/
+.idea/
