@@ -14,35 +14,35 @@ Uso básico:
 import argparse
 import sys
 
+from biblioteca.catalogador import (
+    buscar_por_nome,
+    formatar_tamanho,
+    gerar_resumo_acervo,
+    listar_por_ano,
+    listar_por_tipo,
+    listar_por_tipo_e_ano,
+)
 from biblioteca.gerenciador import (
-    adicionar_documento,
-    renomear_documento,
-    remover_documento,
     abrir_documento,
+    adicionar_documento,
+    criar_diretorio,
     ler_documento,
     listar_diretorios,
-    criar_diretorio,
     remover_diretorio,
-)
-from biblioteca.catalogador import (
-    listar_por_tipo,
-    listar_por_ano,
-    listar_por_tipo_e_ano,
-    buscar_por_nome,
-    gerar_resumo_acervo,
-    formatar_tamanho,
+    remover_documento,
+    renomear_documento,
 )
 from biblioteca.utils import (
+    confirmar_acao,
     exibir_cabecalho,
     exibir_documento,
-    confirmar_acao,
     validar_ano,
 )
-
 
 # ---------------------------------------------------------------------------
 # Funções de cada subcomando
 # ---------------------------------------------------------------------------
+
 
 def cmd_listar(args: argparse.Namespace) -> None:
     """Executa o subcomando 'listar'."""
@@ -226,6 +226,7 @@ def cmd_dir_remover(args: argparse.Namespace) -> None:
 # Configuração do parser de argumentos
 # ---------------------------------------------------------------------------
 
+
 def construir_parser() -> argparse.ArgumentParser:
     """Constrói e retorna o parser de argumentos da CLI."""
     parser = argparse.ArgumentParser(
@@ -263,12 +264,16 @@ Exemplos de uso:
     p_listar.set_defaults(func=cmd_listar)
 
     # --- adicionar ---
-    p_adicionar = subparsers.add_parser("adicionar", help="Adiciona um documento ao acervo")
+    p_adicionar = subparsers.add_parser(
+        "adicionar", help="Adiciona um documento ao acervo"
+    )
     p_adicionar.add_argument("arquivo", help="Caminho do arquivo a adicionar")
-    p_adicionar.add_argument("--ano", required=True, help="Ano de publicação do documento")
+    p_adicionar.add_argument(
+        "--ano", required=True, help="Ano de publicação do documento"
+    )
     p_adicionar.add_argument(
         "--tipo",
-        choices=list(["pdf", "epub", "mobi", "txt", "md", "docx", "djvu"]),
+        choices=["pdf", "epub", "mobi", "txt", "md", "docx", "djvu"],
         default=None,
         help="Tipo do documento (inferido pela extensão se omitido)",
     )
@@ -294,12 +299,16 @@ Exemplos de uso:
     p_buscar.set_defaults(func=cmd_buscar)
 
     # --- abrir ---
-    p_abrir = subparsers.add_parser("abrir", help="Abre um documento no visualizador padrão")
+    p_abrir = subparsers.add_parser(
+        "abrir", help="Abre um documento no visualizador padrão"
+    )
     p_abrir.add_argument("caminho", help="Caminho do documento a abrir")
     p_abrir.set_defaults(func=cmd_abrir)
 
     # --- ler ---
-    p_ler = subparsers.add_parser("ler", help="Exibe o conteúdo textual de um documento")
+    p_ler = subparsers.add_parser(
+        "ler", help="Exibe o conteúdo textual de um documento"
+    )
     p_ler.add_argument("caminho", help="Caminho do documento a ler")
     p_ler.add_argument(
         "--linhas", type=int, default=50, help="Número de linhas a exibir (padrão: 50)"
@@ -307,7 +316,9 @@ Exemplos de uso:
     p_ler.set_defaults(func=cmd_ler)
 
     # --- resumo ---
-    p_resumo = subparsers.add_parser("resumo", help="Exibe resumo estatístico do acervo")
+    p_resumo = subparsers.add_parser(
+        "resumo", help="Exibe resumo estatístico do acervo"
+    )
     p_resumo.set_defaults(func=cmd_resumo)
 
     # --- dir ---
@@ -335,6 +346,7 @@ Exemplos de uso:
 # ---------------------------------------------------------------------------
 # Ponto de entrada
 # ---------------------------------------------------------------------------
+
 
 def main() -> None:
     """Função principal: analisa os argumentos e despacha o subcomando."""

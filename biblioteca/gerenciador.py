@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import shutil
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -18,7 +19,6 @@ logging.basicConfig(
     filename="biblioteca_digital.log",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    encoding="utf-8",
 )
 
 
@@ -107,7 +107,10 @@ def abrir_documento(caminho: str) -> None:
     if not doc_path.exists():
         raise FileNotFoundError(f"Arquivo não encontrado: {caminho}")
 
-    os.startfile(caminho) if os.name == "nt" else os.system(f'xdg-open "{caminho}"')
+    if os.name == "nt":
+        os.startfile(caminho)
+    else:
+        subprocess.run(["xdg-open", caminho], check=False)
     logging.info("Documento aberto: %s", caminho)
 
 

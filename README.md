@@ -112,7 +112,7 @@ pytest>=7.0
 ### 1. Clone o repositório
 
 ```bash
-git clone https://github.com/seu-usuario/biblioteca-digital.git
+git clone https://github.com/sindelitcis/biblioteca-digital.git
 cd biblioteca-digital
 ```
 
@@ -279,6 +279,33 @@ python main.py dir remover <CAMINHO> [--forcar] [--sim]
 |---|---|
 | `--forcar` | Remove mesmo que o diretório não esteja vazio |
 | `--sim` | Confirma sem perguntar |
+
+---
+
+### Exemplos Combinados
+
+Estas combinações de comandos permitem tarefas mais específicas do dia a dia:
+
+```bash
+# Listar apenas documentos PDF do acervo
+python main.py listar --por tipo | grep -A 1000 "PDF"
+
+# Buscar documentos de um ano específico e ordenar por tipo
+python main.py listar --por ambos
+
+# Adicionar explicitamente informando o tipo (útil quando a extensão é ambígua)
+python main.py adicionar tese.pdf --ano 2024 --tipo pdf
+
+# Ver resumo após adicionar/remover para conferir o estado do acervo
+python main.py resumo
+
+# Remover um diretório inteiro de uma só vez (com confirmação)
+python main.py dir remover acervo/epub/2021 --forcar --sim
+
+# Buscar termo e depois abrir o resultado diretamente
+python main.py buscar "aprendizado de máquina"
+python main.py abrir acervo/pdf/2024/artigo_ml.pdf
+```
 
 ---
 

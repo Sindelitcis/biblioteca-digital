@@ -1,192 +1,240 @@
 """
-Módulo de catalogação da Biblioteca Digital.
+Testes unitários para o módulo catalogador da Biblioteca Digital.
 
-Responsável por listar e organizar documentos por tipo de arquivo
-e por ano de publicação, além de gerar relatórios do acervo.
+Cobre as funções de listagem, agrupamento, busca e resumo do acervo.
 """
 
-from collections import defaultdict
+import tempfile
+import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from biblioteca.utils import CAMINHO_ACERVO, TIPOS_SUPORTADOS
-
-
-def listar_todos_documentos() -> list:
-    """
-    Varre o acervo e retorna uma lista com todos os documentos encontrados.
-
-    Cada item da lista é um dicionário com informações do arquivo:
-    nome, tipo, ano, caminho e tamanho em bytes.
-
-    Returns:
-        list: Lista de dicionários representando cada documento.
-    """
-    acervo_path = Path(CAMINHO_ACERVO)
-    documentos = []
-
-    if not acervo_path.exists():
-        return documentos
-
-    # Percorre todos os arquivos recursivamente no acervo
-    for arquivo in sorted(acervo_path.rglob("*")):
-        if not arquivo.is_file():
-            continue
-
-        extensao = arquivo.suffix.lower().lstrip(".")
-
-        if extensao not in TIPOS_SUPORTADOS:
-            continue
-
-        # A estrutura esperada é: acervo/<tipo>/<ano>/<arquivo>
-        partes = arquivo.parts
-        try:
-            ano = int(partes[-2])
-            tipo = partes[-3]
-        except (ValueError, IndexError):
-            ano = 0
-            tipo = extensao
-
-        documentos.append(
-            {
-                "nome": arquivo.name,
-                "tipo": tipo,
-                "ano": ano,
-                "caminho": str(arquivo),
-                "tamanho_bytes": arquivo.stat().st_size,
-            }
-        )
-
-    return documentos
+from biblioteca import catalogador
 
 
-def listar_por_tipo() -> dict:
-    """
-    Agrupa e retorna os documentos do acervo organizados por tipo de arquivo.
-
-    Returns:
-        dict: Dicionário onde cada chave é um tipo (ex: 'pdf', 'epub')
-              e o valor é a lista de documentos daquele tipo.
-
-    Example:
-        >>> resultado = listar_por_tipo()
-        >>> print(resultado.keys())
-        dict_keys(['pdf', 'epub', 'txt'])
-    """
-    documentos = listar_todos_documentos()
-    agrupados = defaultdict(list)
-
-    for doc in documentos:
-        agrupados[doc["tipo"]].append(doc)
-
-    return dict(sorted(agrupados.items()))
+def _criar_arquivo(base, tipo, ano, nome):
+    """Cria um arquivo fictício no acervo temporário."""
+    dir_path = Path(base) / tipo / str(ano)
+    dir_path.mkdir(parents=True, exist_ok=True)
+    arquivo = dir_path / nome
+    arquivo.write_text("conteudo", encoding="utf-8")
+    return arquivo
 
 
-def listar_por_ano() -> dict:
-    """
-    Agrupa e retorna os documentos do acervo organizados por ano de publicação.
+class TestListarTodosDocumentos(unittest.TestCase):
+    """Testes para a função listar_todos_documentos."""
 
-    Returns:
-        dict: Dicionário onde cada chave é um ano (int) e o valor é
-              a lista de documentos publicados naquele ano.
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp()
+        self._patcher = patch("biblioteca.catalogador.CAMINHO_ACERVO", self._tmp)
+        self._patcher.start()
 
-    Example:
-        >>> resultado = listar_por_ano()
-        >>> print(resultado.keys())
-        dict_keys([2020, 2022, 2024])
-    """
-    documentos = listar_todos_documentos()
-    agrupados = defaultdict(list)
+    def tearDown(self):
+        self._patcher.stop()
 
-    for doc in documentos:
-        agrupados[doc["ano"]].append(doc)
+    def test_acervo_vazio(self):
+        """Acervo sem documentos deve retornar lista vazia."""
+        self.assertEqual(catalogador.listar_todos_documentos(), [])
 
-    return dict(sorted(agrupados.items()))
+    def test_retorna_todos_os_documentos(self):
+        """Deve retornar todos os documentos presentes no acervo."""
+        _criar_arquivo(self._tmp, "pdf", 2024, "artigo.pdf")
+        _criar_arquivo(self._tmp, "epub", 2023, "livro.epub")
+        _criar_arquivo(self._tmp, "txt", 2024, "notas.txt")
+        documentos = catalogador.listar_todos_documentos()
+        self.assertEqual(len(documentos), 3)
 
-
-def listar_por_tipo_e_ano() -> dict:
-    """
-    Agrupa os documentos por tipo e, dentro de cada tipo, por ano.
-
-    Returns:
-        dict: Dicionário aninhado no formato {tipo: {ano: [documentos]}}.
-
-    Example:
-        >>> resultado = listar_por_tipo_e_ano()
-        >>> resultado['pdf'][2023]
-        [{'nome': 'artigo.pdf', ...}]
-    """
-    documentos = listar_todos_documentos()
-    agrupados: dict = defaultdict(lambda: defaultdict(list))
-
-    for doc in documentos:
-        agrupados[doc["tipo"]][doc["ano"]].append(doc)
-
-    # Converte defaultdicts para dicts comuns (mais legíveis)
-    return {
-        tipo: dict(sorted(anos.items())) for tipo, anos in sorted(agrupados.items())
-    }
+    def test_campos_do_documento(self):
+        """Cada documento retornado deve conter os campos esperados."""
+        _criar_arquivo(self._tmp, "pdf", 2024, "artigo.pdf")
+        doc = catalogador.listar_todos_documentos()[0]
+        self.assertIn("nome", doc)
+        self.assertIn("tipo", doc)
+        self.assertIn("ano", doc)
+        self.assertIn("caminho", doc)
+        self.assertIn("tamanho_bytes", doc)
 
 
-def buscar_por_nome(termo: str) -> list:
-    """
-    Busca documentos no acervo cujo nome contenha o termo informado.
+class TestListarPorTipo(unittest.TestCase):
+    """Testes para a função listar_por_tipo."""
 
-    A busca não diferencia maiúsculas de minúsculas.
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp()
+        self._patcher = patch("biblioteca.catalogador.CAMINHO_ACERVO", self._tmp)
+        self._patcher.start()
 
-    Args:
-        termo (str): Palavra ou trecho a ser pesquisado no nome do arquivo.
+    def tearDown(self):
+        self._patcher.stop()
 
-    Returns:
-        list: Lista de documentos cujo nome contenha o termo buscado.
-    """
-    documentos = listar_todos_documentos()
-    termo_lower = termo.lower()
+    def test_agrupa_por_tipo(self):
+        """Documentos devem ser agrupados corretamente por tipo."""
+        _criar_arquivo(self._tmp, "pdf", 2024, "a.pdf")
+        _criar_arquivo(self._tmp, "pdf", 2023, "b.pdf")
+        _criar_arquivo(self._tmp, "epub", 2024, "c.epub")
+        agrupados = catalogador.listar_por_tipo()
+        self.assertEqual(len(agrupados["pdf"]), 2)
+        self.assertEqual(len(agrupados["epub"]), 1)
 
-    return [doc for doc in documentos if termo_lower in doc["nome"].lower()]
-
-
-def gerar_resumo_acervo() -> dict:
-    """
-    Gera um resumo estatístico do acervo da biblioteca.
-
-    Returns:
-        dict: Dicionário com total de documentos, contagem por tipo,
-              contagem por ano e tamanho total em bytes.
-    """
-    documentos = listar_todos_documentos()
-
-    contagem_tipo: dict = defaultdict(int)
-    contagem_ano: dict = defaultdict(int)
-    tamanho_total = 0
-
-    for doc in documentos:
-        contagem_tipo[doc["tipo"]] += 1
-        contagem_ano[doc["ano"]] += 1
-        tamanho_total += doc["tamanho_bytes"]
-
-    return {
-        "total_documentos": len(documentos),
-        "por_tipo": dict(sorted(contagem_tipo.items())),
-        "por_ano": dict(sorted(contagem_ano.items())),
-        "tamanho_total_bytes": tamanho_total,
-        "tamanho_total_mb": round(tamanho_total / (1024 * 1024), 2),
-    }
+    def test_quantidade_por_tipo(self):
+        """Deve retornar a quantidade correta de tipos distintos."""
+        _criar_arquivo(self._tmp, "pdf", 2024, "a.pdf")
+        _criar_arquivo(self._tmp, "epub", 2023, "b.epub")
+        _criar_arquivo(self._tmp, "txt", 2024, "c.txt")
+        agrupados = catalogador.listar_por_tipo()
+        self.assertEqual(set(agrupados.keys()), {"pdf", "epub", "txt"})
 
 
-def formatar_tamanho(bytes_: int) -> str:
-    """
-    Converte um valor em bytes para representação legível (KB, MB ou GB).
+class TestListarPorAno(unittest.TestCase):
+    """Testes para a função listar_por_ano."""
 
-    Args:
-        bytes_ (int): Tamanho em bytes.
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp()
+        self._patcher = patch("biblioteca.catalogador.CAMINHO_ACERVO", self._tmp)
+        self._patcher.start()
 
-    Returns:
-        str: Tamanho formatado como string (ex: '1.25 MB').
-    """
-    if bytes_ < 1024:
-        return f"{bytes_} B"
-    if bytes_ < 1024**2:
-        return f"{bytes_ / 1024:.1f} KB"
-    if bytes_ < 1024**3:
-        return f"{bytes_ / (1024**2):.2f} MB"
-    return f"{bytes_ / (1024**3):.2f} GB"
+    def tearDown(self):
+        self._patcher.stop()
+
+    def test_agrupa_por_ano(self):
+        """Documentos devem ser agrupados corretamente por ano."""
+        _criar_arquivo(self._tmp, "pdf", 2024, "a.pdf")
+        _criar_arquivo(self._tmp, "epub", 2024, "b.epub")
+        _criar_arquivo(self._tmp, "pdf", 2023, "c.pdf")
+        agrupados = catalogador.listar_por_ano()
+        self.assertEqual(len(agrupados[2024]), 2)
+        self.assertEqual(len(agrupados[2023]), 1)
+
+    def test_quantidade_por_ano(self):
+        """Deve retornar a quantidade correta de anos distintos."""
+        _criar_arquivo(self._tmp, "pdf", 2024, "a.pdf")
+        _criar_arquivo(self._tmp, "epub", 2022, "b.epub")
+        _criar_arquivo(self._tmp, "txt", 2024, "c.txt")
+        agrupados = catalogador.listar_por_ano()
+        self.assertEqual(set(agrupados.keys()), {2024, 2022})
+
+
+class TestListarPorTipoEAno(unittest.TestCase):
+    """Testes para a função listar_por_tipo_e_ano."""
+
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp()
+        self._patcher = patch("biblioteca.catalogador.CAMINHO_ACERVO", self._tmp)
+        self._patcher.start()
+
+    def tearDown(self):
+        self._patcher.stop()
+
+    def test_estrutura_aninhada(self):
+        """Deve retornar estrutura aninhada {tipo: {ano: [docs]}}."""
+        _criar_arquivo(self._tmp, "pdf", 2024, "a.pdf")
+        _criar_arquivo(self._tmp, "pdf", 2023, "b.pdf")
+        _criar_arquivo(self._tmp, "epub", 2024, "c.epub")
+        resultado = catalogador.listar_por_tipo_e_ano()
+        self.assertIn("pdf", resultado)
+        self.assertIn("epub", resultado)
+        self.assertIn(2024, resultado["pdf"])
+        self.assertIn(2023, resultado["pdf"])
+        self.assertIn(2024, resultado["epub"])
+
+    def test_sem_cruzamento_entre_tipos(self):
+        """Documentos de tipos diferentes não devem aparecer no mesmo grupo."""
+        _criar_arquivo(self._tmp, "pdf", 2024, "a.pdf")
+        _criar_arquivo(self._tmp, "epub", 2024, "b.epub")
+        resultado = catalogador.listar_por_tipo_e_ano()
+        self.assertEqual(len(resultado["pdf"][2024]), 1)
+        self.assertEqual(len(resultado["epub"][2024]), 1)
+
+
+class TestBuscarPorNome(unittest.TestCase):
+    """Testes para a função buscar_por_nome."""
+
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp()
+        self._patcher = patch("biblioteca.catalogador.CAMINHO_ACERVO", self._tmp)
+        self._patcher.start()
+
+    def tearDown(self):
+        self._patcher.stop()
+
+    def test_busca_case_insensitive(self):
+        """A busca não deve diferenciar maiúsculas de minúsculas."""
+        _criar_arquivo(self._tmp, "pdf", 2024, "Redes Neurais.pdf")
+        resultados = catalogador.buscar_por_nome("redes")
+        self.assertEqual(len(resultados), 1)
+        resultados = catalogador.buscar_por_nome("REDES")
+        self.assertEqual(len(resultados), 1)
+
+    def test_encontra_por_termo_exato(self):
+        """Deve encontrar documentos cujo nome contenha o termo exato."""
+        _criar_arquivo(self._tmp, "pdf", 2024, "artigo_ia.pdf")
+        _criar_arquivo(self._tmp, "pdf", 2024, "tcc_redes.pdf")
+        resultados = catalogador.buscar_por_nome("artigo")
+        self.assertEqual(len(resultados), 1)
+        self.assertEqual(resultados[0]["nome"], "artigo_ia.pdf")
+
+    def test_sem_resultado(self):
+        """Deve retornar lista vazia quando nenhum documento corresponder."""
+        _criar_arquivo(self._tmp, "pdf", 2024, "artigo.pdf")
+        resultados = catalogador.buscar_por_nome("inexistente")
+        self.assertEqual(resultados, [])
+
+
+class TestGerarResumoAcervo(unittest.TestCase):
+    """Testes para a função gerar_resumo_acervo."""
+
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp()
+        self._patcher = patch("biblioteca.catalogador.CAMINHO_ACERVO", self._tmp)
+        self._patcher.start()
+
+    def tearDown(self):
+        self._patcher.stop()
+
+    def test_chaves_presentes(self):
+        """O resumo deve conter todas as chaves esperadas."""
+        _criar_arquivo(self._tmp, "pdf", 2024, "a.pdf")
+        resumo = catalogador.gerar_resumo_acervo()
+        self.assertIn("total_documentos", resumo)
+        self.assertIn("por_tipo", resumo)
+        self.assertIn("por_ano", resumo)
+        self.assertIn("tamanho_total_bytes", resumo)
+        self.assertIn("tamanho_total_mb", resumo)
+
+    def test_total_correto(self):
+        """O total de documentos no resumo deve estar correto."""
+        _criar_arquivo(self._tmp, "pdf", 2024, "a.pdf")
+        _criar_arquivo(self._tmp, "epub", 2023, "b.epub")
+        _criar_arquivo(self._tmp, "txt", 2024, "c.txt")
+        resumo = catalogador.gerar_resumo_acervo()
+        self.assertEqual(resumo["total_documentos"], 3)
+
+
+class TestFormatarTamanho(unittest.TestCase):
+    """Testes para a função formatar_tamanho."""
+
+    def test_bytes(self):
+        """Valores abaixo de 1024 devem ser exibidos em bytes."""
+        self.assertEqual(catalogador.formatar_tamanho(512), "512 B")
+        self.assertEqual(catalogador.formatar_tamanho(0), "0 B")
+
+    def test_kilobytes(self):
+        """Valores entre 1024 e 1024^2 devem ser exibidos em KB."""
+        resultado = catalogador.formatar_tamanho(2048)
+        self.assertIn("KB", resultado)
+        self.assertEqual(resultado, "2.0 KB")
+
+    def test_megabytes(self):
+        """Valores entre 1024^2 e 1024^3 devem ser exibidos em MB."""
+        resultado = catalogador.formatar_tamanho(5 * 1024**2)
+        self.assertIn("MB", resultado)
+        self.assertEqual(resultado, "5.00 MB")
+
+    def test_gigabytes(self):
+        """Valores acima de 1024^3 devem ser exibidos em GB."""
+        resultado = catalogador.formatar_tamanho(3 * 1024**3)
+        self.assertIn("GB", resultado)
+        self.assertEqual(resultado, "3.00 GB")
+
+
+if __name__ == "__main__":
+    unittest.main()
